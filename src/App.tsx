@@ -31,34 +31,33 @@ type AutoCompleteResult = {
   types: string[];
 };
 
-function MyMapComponent({ center, zoom }: { center: google.maps.LatLngLiteral; zoom: number }) {
+function MapComponent({ center, zoom }: { center: google.maps.LatLngLiteral; zoom: number }) {
   const ref = useRef();
 
   useEffect(() => {
-    new window.google.maps.Map(ref.current, {
+    const map = new window.google.maps.Map(ref.current, {
       center,
       zoom,
     });
+    const marker = new window.google.maps.Marker({
+      position: center,
+    });
+    marker.setMap(map);
   });
 
-  return <div style={{ width: '400px', height: '400px' }} ref={ref} id="map" />;
+  return <div style={{ width: '100%', height: '400px', borderRadius: '16px' }} ref={ref} id="map" />;
 }
-
-let timeout: ReturnType<typeof setTimeout> | null;
-let currentValue: string;
 
 function App() {
   const [options, setOptions] = useState<SelectProps['options']>([]);
 
   const [query, setQuery] = useState<string>('');
 
-  const dispatch = useDispatch();
+  const [location, setLocation] = useState<google.maps.LatLngLiteral>({
+    lat: 0,
+    lng: 0,
+  });
 
-  const predictions = useSelector((state: any) => state.predictions.byId[query]);
-
-  console.log('predictions', predictions);
-
-  const center = { lat: -34.397, lng: 150.644 };
   const zoom = 4;
 
   const Loading = () => (
@@ -66,25 +65,62 @@ function App() {
       <Spin />
     </div>
   );
-
   const AutocompleteApp = () => {
     const autocompleteService = new google.maps.places.AutocompleteService();
 
     const handleSearch = (newValue: string) => {
-      dispatch(searchPlace(newValue));
+      autocompleteService.getPlacePredictions({ input: newValue }, (predictions, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          setOptions(predictions?.map((d) => ({ value: d.place_id, label: d.description })));
+        }
+      });
+    };
+
+    const handleSelect = (value: string) => {
+      const geolocationService = new google.maps.Geocoder();
+
+      geolocationService.geocode({ placeId: value }, (results, status) => {
+        if (status === google.maps.GeocoderStatus.OK) {
+          const { lat, lng } = results[0].geometry.location;
+          setLocation({ lat: lat(), lng: lng() });
+        }
+      });
     };
 
     return (
       <div className="App">
-        <h1>React + Ant Design + TypeScript</h1>
-        <AutoComplete
-          options={options}
-          style={{ width: 200 }}
-          // onSelect={onSelect}
-          onSearch={handleSearch}
-          placeholder="input here"
-        />
-        {/* <MyMapComponent center={center} zoom={zoom} /> */}
+        <div
+          style={{
+            maxWidth: '600px',
+            backgroundColor: '#B2BEB5',
+            borderRadius: '16px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
+          <h1
+            style={{
+              color: '#fff',
+              fontSize: '36px',
+              fontWeight: 'bold',
+              marginBottom: 0,
+            }}
+          >
+            React + Ant Design + TypeScript
+          </h1>
+          <AutoComplete
+            options={options}
+            style={{ width: '100%' }}
+            value={query}
+            onSelect={handleSelect}
+            onSearch={handleSearch}
+            placeholder="Search for location"
+          />
+          <MapComponent center={location} zoom={zoom} />
+        </div>
       </div>
     );
   };
@@ -101,7 +137,9 @@ function App() {
     }
   };
 
-  return <Wrapper libraries={['places']} apiKey={'AIzaSyC-_8Vc4Y8nn6zNnCDBjNgb11-x9xo5nUQ'} render={render} />;
+  return (
+    <Wrapper libraries={['places', 'marker']} apiKey={'AIzaSyC-_8Vc4Y8nn6zNnCDBjNgb11-x9xo5nUQ'} render={render} />
+  );
 }
 
 export default App;
